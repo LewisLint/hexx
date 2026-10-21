@@ -29,6 +29,7 @@ func main() {
 	cols := flag.Int("c", 16, "# of cols per line")
 	gs := flag.Int("g", 1, "# of octets per group")
 	bt := flag.Int("b", -1, "Byte offset to highlight") // -1 means no bytes selected
+	de := flag.String("d", "", "Decode selected byte(s) defined with '-b'")
 
 	ffind := flag.String("F", "", "String to search for")
 	xfind := flag.String("f", "", "Hex bytes to search for")
@@ -50,6 +51,56 @@ func main() {
 		return
 	}
 	file := args[0]
+	if *de != "" {
+		if *bt < 1 {
+			fmt.Fprintf(os.Stderr, "-d bit requires a -b selection\n")
+			return
+		}
+		data, err := os.ReadFile(file)
+		if err != nil {
+			panic(err)
+		}
+		if be > len(data) {
+			fmt.Fprintf(os.Stderr, "selected range contains EOF\n")
+			return
+		}
+		if *de == "bit" {
+			fmt.Printf("bits: ")
+			for _, b := range data[*bt-1 : be] {
+				fmt.Printf("%08b ", b)
+			}
+		} else if *de == "byte" {
+			fmt.Printf("bytes: ")
+			for _, b := range data[*bt-1 : be] {
+				fmt.Printf("%02x ", b)
+			}
+		} else if *de == "dec" {
+			fmt.Printf("decimals: ")
+			for _, b := range data[*bt-1 : be] {
+				fmt.Printf("%02d ", b)
+			}
+		}
+		fmt.Printf("\n")
+
+	}
+	//	if *de == "byte" {
+	//		if *bt < 1 {
+	//			fmt.Fprintf(os.Stderr, "-d byte requires a -b selection\n")
+	//		}
+	//		data, err := os.ReadFile(file)
+	//		if err != nil {
+	//			panic(err)
+	//		}
+	//		if be > len(data) {
+	//			fmt.Fprintf(os.Stderr, "selected range contains EOF\n")
+	//			return
+	//		}
+	//		fmt.Printf("Bytes: ")
+	//		for _, b := range data[*bt-1 : be] {
+	//			fmt.Printf("%d ", b)
+	//		}
+	//		fmt.Printf("\n")
+	//	}
 	if *cols <= 0 || *gs < 0 {
 		fmt.Fprintln(os.Stderr, "columns must be positive and group size cannot be negative")
 		return
