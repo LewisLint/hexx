@@ -11,16 +11,17 @@ import (
 )
 
 const (
-	Reset     = "\x1b[0m"
-	Bold      = "\033[1m"
-	Gray      = "\x1b[38;2;110;106;134m" // Subtle
-	Cyan      = "\x1b[38;2;156;207;216m" // Foam
-	Bgcyan    = "\x1b[46m"               // Background cyan
-	Red       = "\x1b[38;2;235;111;146m" // Love
-	Purple    = "\x1b[38;2;196;167;231m" // Iris
-	Green     = "\x1b[38;2;49;116;143m"  // Pine
-	Yellow    = "\x1b[38;2;246;193;119m" // Gold
-	Bgmagenta = "\x1b[45m"
+	Reset = "\x1b[0m"
+	Bold  = "\033[1m"
+
+	Gray      = "\x1b[38;2;148;163;184m"
+	Cyan      = "\x1b[38;2;80;190;220m"
+	Red       = "\x1b[38;2;235;92;92m"
+	Blue      = "\x1b[38;2;100;160;245m"
+	Green     = "\x1b[38;2;80;190;120m"
+	Yellow    = "\x1b[38;2;235;170;60m"
+	BgHex     = "\x1b[48;2;23;78;99m"
+	BgString  = "\x1b[48;2;110;75;20m"
 )
 
 func main() {
@@ -35,6 +36,10 @@ func main() {
 		return
 	}
 	file := args[0]
+	if *cols <= 0 || *gs <= 0 {
+		fmt.Fprintln(os.Stderr, "columns and group size must be positive")
+		return
+	}
 
 	//	pattern := []byte(*ffind)
 	var pattern []byte
@@ -105,7 +110,7 @@ func main() {
 	for {
 		n, err := f.Read(buf)
 		if n > 0 {
-			fmt.Printf("%08x: ", offset)
+			fmt.Printf("%v%08x: %v", Gray, offset, Reset)
 			for i, b := range buf[:n] {
 				if i > 0 && i%*gs == 0 { // some weird modulo shit. checks if i is divisible by *gs
 					fmt.Printf(" ")
@@ -115,9 +120,9 @@ func main() {
 				hexh := *xfind != "" && hl(position, matches, len(pattern))
 
 				if stringh {
-					fmt.Print(Bgmagenta)
+					fmt.Print(BgString)
 				} else if hexh {
-					fmt.Print(Bgcyan)
+					fmt.Print(BgHex)
 				}
 
 				fmt.Printf("%v%s%02x", Bold, byteColor(b), b)
@@ -125,6 +130,12 @@ func main() {
 				if stringh || hexh {
 					fmt.Print(Reset)
 				}
+			}
+			for i := n; i < *cols; i++ {
+				if i > 0 && i%*gs == 0 {
+					fmt.Print(" ")
+				}
+				fmt.Print("  ")
 			}
 			fmt.Printf(" \x1b[0m   ")
 			for _, b := range buf[:n] {
@@ -152,7 +163,7 @@ func main() {
 func byteColor(b byte) string {
 	switch {
 	case b == 0x00:
-		return Purple
+		return Blue
 	case b == 0xFF:
 		return Red
 	case b >= 0x20 && b <= 0x7E:
