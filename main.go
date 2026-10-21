@@ -7,37 +7,51 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"unicode"
 )
 
 const (
-	Reset = "\x1b[0m"
-	Bold  = "\033[1m"
-
-	Gray      = "\x1b[38;2;148;163;184m"
-	Cyan      = "\x1b[38;2;80;190;220m"
-	Red       = "\x1b[38;2;235;92;92m"
-	Blue      = "\x1b[38;2;100;160;245m"
-	Green     = "\x1b[38;2;80;190;120m"
-	Yellow    = "\x1b[38;2;235;170;60m"
-	BgHex     = "\x1b[48;2;23;78;99m"
-	BgString  = "\x1b[48;2;110;75;20m"
+	Reset    = "\x1b[0m"
+	Bold     = "\033[1m"
+	Gray     = "\x1b[38;2;148;163;184m"
+	Cyan     = "\x1b[38;2;80;190;220m"
+	Red      = "\x1b[38;2;235;92;92m"
+	Blue     = "\x1b[38;2;100;160;245m"
+	Green    = "\x1b[38;2;80;190;120m"
+	Yellow   = "\x1b[38;2;235;170;60m"
+	BgHex    = "\x1b[48;2;23;78;99m"
+	BgString = "\x1b[48;2;110;75;20m"
+	BgByte   = "\x1b[41m"
 )
 
 func main() {
 	cols := flag.Int("c", 16, "# of cols per line")
 	gs := flag.Int("g", 1, "# of octets per group")
+	bt := flag.Int("b", -1, "Byte offset to highlight") // -1 means no bytes selected
+
 	ffind := flag.String("F", "", "String to search for")
 	xfind := flag.String("f", "", "Hex bytes to search for")
 	flag.Parse()
 	args := flag.Args()
+	be := *bt
+	if *bt >= 0 && len(args) == 2 {
+		end, err := strconv.Atoi(args[0])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "E: expected an absolute end offset after '-b'")
+			return
+		}
+		be = end
+		args = args[1:]
+	}
+
 	if len(args) > 1 {
 		fmt.Printf("E: Expected filepath\n")
 		return
 	}
 	file := args[0]
-	if *cols <= 0 || *gs <= 0 {
-		fmt.Fprintln(os.Stderr, "columns and group size must be positive")
+	if *cols <= 0 || *gs < 0 {
+		fmt.Fprintln(os.Stderr, "columns must be positive and group size cannot be negative")
 		return
 	}
 
@@ -112,14 +126,20 @@ func main() {
 		if n > 0 {
 			fmt.Printf("%v%08x: %v", Gray, offset, Reset)
 			for i, b := range buf[:n] {
-				if i > 0 && i%*gs == 0 { // some weird modulo shit. checks if i is divisible by *gs
+				if *gs > 0 && i > 0 && i%*gs == 0 {
 					fmt.Printf(" ")
 				}
 				position := offset + i
+				byteh := *bt >= 0 &&
+					position+1 >= *bt &&
+					position+1 <= be
+
 				stringh := *ffind != "" && hl(position, stringmatches, len(*ffind))
 				hexh := *xfind != "" && hl(position, matches, len(pattern))
 
-				if stringh {
+				if byteh {
+					fmt.Printf(BgByte)
+				} else if stringh {
 					fmt.Print(BgString)
 				} else if hexh {
 					fmt.Print(BgHex)
@@ -127,12 +147,12 @@ func main() {
 
 				fmt.Printf("%v%s%02x", Bold, byteColor(b), b)
 
-				if stringh || hexh {
+				if byteh || stringh || hexh {
 					fmt.Print(Reset)
 				}
 			}
 			for i := n; i < *cols; i++ {
-				if i > 0 && i%*gs == 0 {
+				if *gs > 0 && i > 0 && i%*gs == 0 {
 					fmt.Print(" ")
 				}
 				fmt.Print("  ")

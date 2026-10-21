@@ -1,6 +1,6 @@
 # hexx
 
-`hexx` is a small colorized hex dumper for inspecting files. It displays byte offsets, grouped hexadecimal bytes, and an ASCII preview. Search matches are highlighted in the hex column.
+`hexx` is a small colorized hex dumper for inspecting files. It displays byte offsets, grouped hexadecimal bytes, and an ASCII preview. Search matches and selected byte ranges are highlighted in the hex column.
 
 ## Usage
 
@@ -23,6 +23,9 @@ Options must come before the filename.
 | `-g <n>` | Number of bytes per visual hex group | `1` |
 | `-F <text>` | Search for literal text | None |
 | `-f <hex>` | Search for hex bytes, written as pairs of digits | None |
+| `-b <start> [end]` | Highlight a 1-based byte position or inclusive range | None |
+
+Use `-g 0` to disable spaces between hex groups. A single `-b` value highlights one byte; with two values, `-b <start> <end>` highlights the inclusive range. The byte positions are 1-based, so `-b 1` highlights the first byte.
 
 ## Examples
 
@@ -56,4 +59,13 @@ Search for both a string and a hex sequence in the same dump:
 go run . -F "hello" -f d4c3b2a1 capture.pcap
 ```
 
-Literal-string matches are highlighted with a magenta background; hex matches use cyan. `-f` accepts pairs of hexadecimal digits without separators, and the number of digits must be even.
+Highlight one byte or an inclusive byte range:
+
+```sh
+go run . -b 5 capture.pcap
+go run . -b 5 10 capture.pcap
+```
+
+Literal-string matches use an amber background, hex matches use teal, and selected byte ranges use red. `-f` accepts pairs of hexadecimal digits without separators, and the number of digits must be even.
+
+*(Note: This README was drafted by AI, as I have a life)
