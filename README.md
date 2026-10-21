@@ -15,7 +15,7 @@ go build -o hexx .
 ./hexx <file>
 ```
 
-Options must come before the filename.
+Options can appear before or after the filename.
 
 | Option | Description | Default |
 | --- | --- | --- |
@@ -24,8 +24,10 @@ Options must come before the filename.
 | `-F <text>` | Search for literal text | None |
 | `-f <hex>` | Search for hex bytes, written as pairs of digits | None |
 | `-b <start> [end]` | Highlight a 1-based byte position or inclusive range | None |
+| `-x <start> <end>` | Show bytes in the zero-based, end-exclusive range | Entire file |
+| `-X <n>` | Show the last `n` bytes | Entire file |
 
-Use `-g 0` to disable spaces between hex groups. A single `-b` value highlights one byte; with two values, `-b <start> <end>` highlights the inclusive range. The byte positions are 1-based, so `-b 1` highlights the first byte.
+Use `-g 0` to disable spaces between hex groups. A single `-b` value highlights one byte; with two values, `-b <start> <end>` highlights the inclusive range. The byte positions are 1-based, so `-b 1` highlights the first byte. The `-x` offsets are zero-based and the end is exclusive, so `-x 0 16` shows the first 16 bytes. `-X 16` shows the last 16 bytes. These truncation options cannot be combined.
 
 ## Examples
 
@@ -64,6 +66,13 @@ Highlight one byte or an inclusive byte range:
 ```sh
 go run . -b 5 capture.pcap
 go run . -b 5 10 capture.pcap
+```
+
+Show only the first 16 bytes or last 16 bytes:
+
+```sh
+go run . -x 0 16 capture.pcap
+go run . -X 16 capture.pcap
 ```
 
 Literal-string matches use an amber background, hex matches use teal, and selected byte ranges use red. `-f` accepts pairs of hexadecimal digits without separators, and the number of digits must be even.

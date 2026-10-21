@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 	"unicode"
 )
 
@@ -30,23 +31,25 @@ func main() {
 	gs := flag.Int("g", 1, "# of octets per group")
 	bt := flag.Int("b", -1, "Byte offset to highlight") // -1 means no bytes selected
 	de := flag.String("d", "", "Decode selected byte(s) defined with '-b'")
+	xstart := flag.Int("x", 0, "Show bytes from this zero-based offset (requires an end offset)")
+	tail := flag.Int("X", 0, "Show this many bytes from the end of the file")
 
 	ffind := flag.String("F", "", "String to search for")
 	xfind := flag.String("f", "", "Hex bytes to search for")
-	flag.Parse()
-	args := flag.Args()
+	flagArgs, args, byteEnd, truncateEnd, hasTruncate, hasTail, err := reorderArgs(os.Args[1:])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+	if err := flag.CommandLine.Parse(flagArgs); err != nil {
+		return
+	}
 	be := *bt
-	if *bt >= 0 && len(args) == 2 {
-		end, err := strconv.Atoi(args[0])
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "E: expected an absolute end offset after '-b'")
-			return
-		}
-		be = end
-		args = args[1:]
+	if byteEnd != nil {
+		be = *byteEnd
 	}
 
-	if len(args) > 1 {
+	if len(args) != 1 {
 		fmt.Printf("E: Expected filepath\n")
 		return
 	}
@@ -79,9 +82,10 @@ func main() {
 			for _, b := range data[*bt-1 : be] {
 				fmt.Printf("%02d ", b)
 			}
+		} else if *de == "str" {
+			fmt.Printf("strings: %s", string(data[*bt-1:be]))
 		}
 		fmt.Printf("\n")
-
 	}
 	//	if *de == "byte" {
 	//		if *bt < 1 {
@@ -169,11 +173,39 @@ func main() {
 	}
 
 	size := info.Size()
+	start, end := int64(0), size
+	if hasTruncate && hasTail {
+		fmt.Fprintln(os.Stderr, "-x and -X cannot be used together")
+		return
+	}
+	if hasTruncate {
+		if *xstart < 0 || truncateEnd == nil || *truncateEnd < *xstart {
+			fmt.Fprintln(os.Stderr, "-x requires a non-negative start and an end offset not less than the start")
+			return
+		}
+		start, end = int64(*xstart), int64(*truncateEnd)
+		if end > size {
+			fmt.Fprintln(os.Stderr, "-x range extends past EOF")
+			return
+		}
+	}
+	if hasTail {
+		if *tail < 0 {
+			fmt.Fprintln(os.Stderr, "-X byte count cannot be negative")
+			return
+		}
+		start = size - int64(*tail)
+		if start < 0 {
+			start = 0
+		}
+	}
 
 	fmt.Printf("Read file %v; size: %d bytes\n", file, size)
 
+	reader := io.NewSectionReader(f, start, end-start)
+	offset = int(start)
 	for {
-		n, err := f.Read(buf)
+		n, err := reader.Read(buf)
 		if n > 0 {
 			fmt.Printf("%v%08x: %v", Gray, offset, Reset)
 			for i, b := range buf[:n] {
@@ -229,6 +261,72 @@ func main() {
 		}
 
 	}
+}
+
+func reorderArgs(args []string) ([]string, []string, *int, *int, bool, bool, error) {
+	valueCounts := map[string]int{"-b": 1, "-c": 1, "-d": 1, "-f": 1, "-F": 1, "-g": 1, "-x": 2, "-X": 1}
+	var flagArgs, positional []string
+	var byteEnd, truncateEnd *int
+	hasTruncate, hasTail := false, false
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			positional = append(positional, args[i+1:]...)
+			break
+		}
+		name, _, hasInlineValue := strings.Cut(arg, "=")
+		count, isFlag := valueCounts[name]
+		if !isFlag {
+			if strings.HasPrefix(arg, "-") {
+				flagArgs = append(flagArgs, arg)
+			} else {
+				positional = append(positional, arg)
+			}
+			continue
+		}
+		flagArgs = append(flagArgs, arg)
+		valueIndexOffset := 0
+		if hasInlineValue {
+			count--
+			if name == "-x" {
+				valueIndexOffset = 1
+			}
+		}
+		for valueIndex := 0; valueIndex < count; valueIndex++ {
+			if i+1 >= len(args) {
+				return nil, nil, nil, nil, false, false, fmt.Errorf("%s requires %d value(s)", name, valueCounts[name])
+			}
+			i++
+			value := args[i]
+			if name == "-x" && valueIndex+valueIndexOffset == 1 {
+				end, err := strconv.Atoi(value)
+				if err != nil {
+					return nil, nil, nil, nil, false, false, fmt.Errorf("-x end offset must be an integer")
+				}
+				truncateEnd = &end
+				hasTruncate = true
+				continue
+			}
+			flagArgs = append(flagArgs, value)
+		}
+		if name == "-b" {
+			byteEnd = nil
+			if i+1 < len(args) {
+				if end, err := strconv.Atoi(args[i+1]); err == nil {
+					i++
+					byteEnd = &end
+				}
+			}
+		}
+		if name == "-x" {
+			hasTruncate = true
+		}
+		if name == "-X" {
+			hasTail = true
+		}
+	}
+	return flagArgs, positional, byteEnd, truncateEnd, hasTruncate, hasTail, nil
 }
 
 func byteColor(b byte) string {
